@@ -1,0 +1,15 @@
+:8080 {
+    root * .
+    file_server
+    
+    # Handle CORS for API requests
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+    }
+    
+    # Handle preflight OPTIONS requests
+    @options method OPTIONS
+    respond @options 200
+}

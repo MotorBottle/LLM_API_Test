@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM API Test Tool</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .disclaimer {
+            background-color: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 20px;
+            color: #0c5460;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #495057;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .checkbox-group input {
+            width: auto;
+        }
+        .message-block {
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: white;
+        }
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .response-area {
+            grid-column: 1 / -1;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .response-content {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .thinking-content {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            font-style: italic;
+            color: #856404;
+        }
+        .thinking-header {
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .message-content {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #667eea;
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #dee2e6;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .json-editor {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            min-height: 100px;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            .actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>> LLM API Test Tool</h1>
+                <p>Test your LLM APIs with a user-friendly interface</p>
+            </div>
+
+            <div class="disclaimer">
+                <strong>= Privacy Notice:</strong> This is a static web page that runs entirely in your browser. 
+                No data is sent to any external servers except for your configured API endpoint. 
+                All processing happens locally on your machine.
+            </div>
+
+            <div class="main-content">
+                <div class="section">
+                    <h3>� API Configuration</h3>
+                    
+                    <div class="form-group">
+                        <label>Base URL:</label>
+                        <input v-model="config.baseUrl" type="text" placeholder="http://127.0.0.1:3000/v1/chat/completions">
+                    </div>
+
+                    <div class="form-group">
+                        <label>API Key:</label>
+                        <input v-model="config.apiKey" type="password" placeholder="sk-your-api-key">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Model Name:</label>
+                        <input v-model="config.modelName" type="text" placeholder="llama3.1:70b">
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input v-model="config.stream" type="checkbox" id="stream">
+                            <label for="stream">Enable Streaming</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Additional Parameters (JSON):</label>
+                        <textarea v-model="additionalParams" class="json-editor" placeholder='{"num_ctx": 2048, "max_tokens": 10}'></textarea>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>=� Messages</h3>
+                    
+                    <div v-for="(message, index) in messages" :key="index" class="message-block">
+                        <div class="message-header">
+                            <select v-model="message.role">
+                                <option value="system">System</option>
+                                <option value="user">User</option>
+                                <option value="assistant">Assistant</option>
+                            </select>
+                            <button @click="removeMessage(index)" class="btn btn-danger" style="padding: 5px 10px;">Remove</button>
+                        </div>
+                        <textarea v-model="message.content" placeholder="Enter message content..." rows="4"></textarea>
+                    </div>
+
+                    <button @click="addMessage" class="btn btn-secondary">+ Add Message</button>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button @click="sendRequest" :disabled="loading" class="btn btn-primary">
+                    <span v-if="loading" class="loading">
+                        <div class="spinner"></div>
+                        Sending...
+                    </span>
+                    <span v-else">=� Send Request</span>
+                </button>
+                
+                <button @click="clearAll" class="btn btn-secondary">=� Clear All</button>
+                <button @click="saveConfig" class="btn btn-success">=� Save Config</button>
+                <button @click="loadConfig" class="btn btn-secondary">=� Load Config</button>
+                <button @click="exportCurl" class="btn btn-secondary">=� Export as cURL</button>
+            </div>
+
+            <div class="response-area" v-if="response || loading">
+                <h3>=� Response</h3>
+                <div v-if="loading" class="loading">
+                    <div class="spinner"></div>
+                    <span>Waiting for response...</span>
+                </div>
+                <div v-else>
+                    <div v-if="parsedResponse && parsedResponse.thinking" class="thinking-content">
+                        <div class="thinking-header">🤔 Thinking Process:</div>
+                        {{ parsedResponse.thinking }}
+                    </div>
+                    <div v-if="parsedResponse && parsedResponse.content" class="message-content">
+                        <div style="font-weight: bold; margin-bottom: 10px; color: #495057;">💬 Response:</div>
+                        {{ parsedResponse.content }}
+                    </div>
+                    <div v-else class="response-content">{{ response }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    config: {
+                        baseUrl: 'http://127.0.0.1:3000/v1/chat/completions',
+                        apiKey: 'sk-your-api-key',
+                        modelName: 'llama3.1:70b',
+                        stream: false
+                    },
+                    additionalParams: '{\n  "num_ctx": 2048,\n  "max_tokens": 10\n}',
+                    messages: [
+                        {
+                            role: 'user',
+                            content: '`/'
+                        }
+                    ],
+                    response: '',
+                    loading: false
+                };
+            },
+            computed: {
+                parsedResponse() {
+                    if (!this.response) return null;
+                    
+                    try {
+                        const parsed = JSON.parse(this.response);
+                        
+                        // Handle OpenAI-style response with choices
+                        if (parsed.choices && parsed.choices[0] && parsed.choices[0].message) {
+                            const message = parsed.choices[0].message;
+                            return {
+                                thinking: message.thinking || null,
+                                content: message.content || null
+                            };
+                        }
+                        
+                        // Handle direct message format
+                        if (parsed.thinking || parsed.content) {
+                            return {
+                                thinking: parsed.thinking || null,
+                                content: parsed.content || null
+                            };
+                        }
+                        
+                        return null;
+                    } catch (e) {
+                        return null;
+                    }
+                }
+            },
+            methods: {
+                addMessage() {
+                    this.messages.push({
+                        role: 'user',
+                        content: ''
+                    });
+                },
+                removeMessage(index) {
+                    this.messages.splice(index, 1);
+                },
+                async sendRequest() {
+                    this.loading = true;
+                    this.response = '';
+
+                    try {
+                        let additionalParamsObj = {};
+                        if (this.additionalParams.trim()) {
+                            try {
+                                additionalParamsObj = JSON.parse(this.additionalParams);
+                            } catch (e) {
+                                throw new Error('Invalid JSON in additional parameters');
+                            }
+                        }
+
+                        const payload = {
+                            model: this.config.modelName,
+                            stream: this.config.stream,
+                            messages: this.messages.filter(m => m.content.trim()),
+                            ...additionalParamsObj
+                        };
+
+                        const headers = {
+                            'Content-Type': 'application/json'
+                        };
+
+                        if (this.config.apiKey && this.config.apiKey !== 'sk-your-api-key') {
+                            headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+                        }
+
+                        const response = await fetch(this.config.baseUrl, {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+
+                        if (this.config.stream) {
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+                            let result = '';
+
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+
+                                const chunk = decoder.decode(value);
+                                result += chunk;
+                                this.response = result;
+                            }
+                        } else {
+                            const data = await response.json();
+                            this.response = JSON.stringify(data, null, 2);
+                        }
+                    } catch (error) {
+                        this.response = `Error: ${error.message}`;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                clearAll() {
+                    this.messages = [{ role: 'user', content: '' }];
+                    this.response = '';
+                },
+                saveConfig() {
+                    const configData = {
+                        config: this.config,
+                        additionalParams: this.additionalParams,
+                        messages: this.messages
+                    };
+                    localStorage.setItem('llm-api-test-config', JSON.stringify(configData));
+                    alert('Configuration saved to browser storage!');
+                },
+                loadConfig() {
+                    const saved = localStorage.getItem('llm-api-test-config');
+                    if (saved) {
+                        const configData = JSON.parse(saved);
+                        this.config = { ...this.config, ...configData.config };
+                        this.additionalParams = configData.additionalParams || this.additionalParams;
+                        this.messages = configData.messages || this.messages;
+                        alert('Configuration loaded from browser storage!');
+                    } else {
+                        alert('No saved configuration found!');
+                    }
+                },
+                exportCurl() {
+                    try {
+                        let additionalParamsObj = {};
+                        if (this.additionalParams.trim()) {
+                            additionalParamsObj = JSON.parse(this.additionalParams);
+                        }
+
+                        const payload = {
+                            model: this.config.modelName,
+                            stream: this.config.stream,
+                            messages: this.messages.filter(m => m.content.trim()),
+                            ...additionalParamsObj
+                        };
+
+                        let curl = `curl --location --request POST '${this.config.baseUrl}' \\\n`;
+                        
+                        if (this.config.apiKey && this.config.apiKey !== 'sk-your-api-key') {
+                            curl += `--header 'Authorization: Bearer ${this.config.apiKey}' \\\n`;
+                        }
+                        
+                        curl += `--header 'Content-Type: application/json' \\\n`;
+                        curl += `--data '${JSON.stringify(payload, null, 2)}'`;
+
+                        navigator.clipboard.writeText(curl).then(() => {
+                            alert('cURL command copied to clipboard!');
+                        }).catch(() => {
+                            prompt('Copy this cURL command:', curl);
+                        });
+                    } catch (error) {
+                        alert('Error generating cURL: ' + error.message);
+                    }
+                }
+            },
+            mounted() {
+                const saved = localStorage.getItem('llm-api-test-config');
+                if (saved) {
+                    try {
+                        const configData = JSON.parse(saved);
+                        this.config = { ...this.config, ...configData.config };
+                        this.additionalParams = configData.additionalParams || this.additionalParams;
+                        this.messages = configData.messages || this.messages;
+                    } catch (e) {
+                        console.warn('Failed to load saved configuration');
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
