@@ -386,7 +386,7 @@
                         if (parsed.choices && parsed.choices[0] && parsed.choices[0].message) {
                             const message = parsed.choices[0].message;
                             return {
-                                thinking: message.reasoning || message.thinking || null,
+                                thinking: message.reasoning || message.reasoning_content || message.thinking || null,
                                 content: message.content || null
                             };
                         }
@@ -505,9 +505,12 @@
                                                 if (delta.content) {
                                                     this.streamedContent += delta.content;
                                                 }
-                                                // Support both 'reasoning' (OpenAI standard) and 'thinking'
+                                                // Support multiple reasoning field formats
                                                 if (delta.reasoning) {
                                                     this.streamedThinking += delta.reasoning;
+                                                }
+                                                if (delta.reasoning_content) {
+                                                    this.streamedThinking += delta.reasoning_content;
                                                 }
                                                 if (delta.thinking) {
                                                     this.streamedThinking += delta.thinking;
