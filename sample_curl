@@ -4,7 +4,6 @@ curl --location --request POST 'http://127.0.0.1:3000/v1/chat/completions' \
 --data '{
 "model": "llama3.1:70b",
 "stream": false,
-"num_ctx": 2048,
 "max_tokens": 10,
 "messages": [
 {
