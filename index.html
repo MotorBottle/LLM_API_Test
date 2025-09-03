@@ -386,7 +386,7 @@
                         if (parsed.choices && parsed.choices[0] && parsed.choices[0].message) {
                             const message = parsed.choices[0].message;
                             return {
-                                thinking: message.thinking || null,
+                                thinking: message.reasoning || message.thinking || null,
                                 content: message.content || null
                             };
                         }
@@ -504,6 +504,10 @@
                                                 const delta = data.choices[0].delta;
                                                 if (delta.content) {
                                                     this.streamedContent += delta.content;
+                                                }
+                                                // Support both 'reasoning' (OpenAI standard) and 'thinking'
+                                                if (delta.reasoning) {
+                                                    this.streamedThinking += delta.reasoning;
                                                 }
                                                 if (delta.thinking) {
                                                     this.streamedThinking += delta.thinking;
