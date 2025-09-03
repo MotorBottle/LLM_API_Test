@@ -1,3 +1,8 @@
+# Force HTTP only (no automatic HTTPS redirect)
+{
+    auto_https off
+}
+
 :8080 {
     root * .
     file_server
