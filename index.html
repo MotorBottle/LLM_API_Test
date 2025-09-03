@@ -34,6 +34,14 @@
             margin: 20px;
             color: #0c5460;
         }
+        .cors-warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 20px;
+            color: #856404;
+        }
         .main-content {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -208,19 +216,24 @@
     <div id="app">
         <div class="container">
             <div class="header">
-                <h1>> LLM API Test Tool</h1>
+                <h1>LLM API Test Tool</h1>
                 <p>Test your LLM APIs with a user-friendly interface</p>
             </div>
 
             <div class="disclaimer">
-                <strong>= Privacy Notice:</strong> This is a static web page that runs entirely in your browser. 
+                <strong>Privacy Notice:</strong> This is a static web page that runs entirely in your browser. 
                 No data is sent to any external servers except for your configured API endpoint. 
                 All processing happens locally on your machine.
             </div>
 
+            <div class="cors-warning">
+                <strong>HTTP/HTTPS Notice:</strong> If your API Base URL uses HTTP (not HTTPS), you must access this web page via HTTP as well to avoid CORS policy errors. 
+                For example, if your API is at <code>http://localhost:3000</code>, access this page via <code>http://</code> not <code>https://</code> or <code>file://</code>.
+            </div>
+
             <div class="main-content">
                 <div class="section">
-                    <h3>� API Configuration</h3>
+                    <h3>API Configuration</h3>
                     
                     <div class="form-group">
                         <label>Base URL:</label>
@@ -251,7 +264,7 @@
                 </div>
 
                 <div class="section">
-                    <h3>=� Messages</h3>
+                    <h3>Messages</h3>
                     
                     <div v-for="(message, index) in messages" :key="index" class="message-block">
                         <div class="message-header">
@@ -275,31 +288,53 @@
                         <div class="spinner"></div>
                         Sending...
                     </span>
-                    <span v-else">=� Send Request</span>
+                    <span v-else>Send Request</span>
                 </button>
                 
-                <button @click="clearAll" class="btn btn-secondary">=� Clear All</button>
-                <button @click="saveConfig" class="btn btn-success">=� Save Config</button>
-                <button @click="loadConfig" class="btn btn-secondary">=� Load Config</button>
-                <button @click="exportCurl" class="btn btn-secondary">=� Export as cURL</button>
+                <button @click="clearAll" class="btn btn-secondary">Clear All</button>
+                <button @click="saveConfig" class="btn btn-success">Save Config</button>
+                <button @click="loadConfig" class="btn btn-secondary">Load Config</button>
+                <button @click="exportCurl" class="btn btn-secondary">Export as cURL</button>
             </div>
 
-            <div class="response-area" v-if="response || loading">
-                <h3>=� Response</h3>
-                <div v-if="loading" class="loading">
+            <div class="response-area" v-if="response || loading || isStreaming">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3>Response</h3>
+                    <div v-if="(response || isStreaming) && !loading" class="checkbox-group">
+                        <input v-model="showRawResponse" type="checkbox" id="raw-toggle">
+                        <label for="raw-toggle">Show Raw JSON</label>
+                    </div>
+                </div>
+                
+                <!-- Show loading spinner only for non-streaming requests -->
+                <div v-if="loading && !isStreaming" class="loading">
                     <div class="spinner"></div>
                     <span>Waiting for response...</span>
                 </div>
-                <div v-else>
-                    <div v-if="parsedResponse && parsedResponse.thinking" class="thinking-content">
-                        <div class="thinking-header">🤔 Thinking Process:</div>
-                        {{ parsedResponse.thinking }}
+                
+                <!-- Show streaming indicator -->
+                <div v-if="isStreaming && loading" class="loading">
+                    <div class="spinner"></div>
+                    <span>Streaming response...</span>
+                </div>
+                
+                <!-- Show content (either streaming or completed) -->
+                <div v-if="response || isStreaming">
+                    <!-- Raw JSON View -->
+                    <div v-if="showRawResponse" class="response-content">{{ response }}</div>
+                    
+                    <!-- Styled View -->
+                    <div v-else>
+                        <div v-if="parsedResponse && parsedResponse.thinking" class="thinking-content">
+                            <div class="thinking-header">Thinking Process:</div>
+                            {{ parsedResponse.thinking }}
+                        </div>
+                        <div v-if="parsedResponse && parsedResponse.content" class="message-content">
+                            <div style="font-weight: bold; margin-bottom: 10px; color: #495057;">Response:</div>
+                            {{ parsedResponse.content }}
+                        </div>
+                        <div v-else-if="response" class="response-content">{{ response }}</div>
                     </div>
-                    <div v-if="parsedResponse && parsedResponse.content" class="message-content">
-                        <div style="font-weight: bold; margin-bottom: 10px; color: #495057;">💬 Response:</div>
-                        {{ parsedResponse.content }}
-                    </div>
-                    <div v-else class="response-content">{{ response }}</div>
                 </div>
             </div>
         </div>
@@ -321,15 +356,27 @@
                     messages: [
                         {
                             role: 'user',
-                            content: '`/'
+                            content: '你是谁'
                         }
                     ],
                     response: '',
-                    loading: false
+                    loading: false,
+                    showRawResponse: false,
+                    streamedContent: '',
+                    streamedThinking: '',
+                    isStreaming: false
                 };
             },
             computed: {
                 parsedResponse() {
+                    // If streaming, use the streamed content directly
+                    if (this.isStreaming) {
+                        return {
+                            thinking: this.streamedThinking || null,
+                            content: this.streamedContent || null
+                        };
+                    }
+                    
                     if (!this.response) return null;
                     
                     try {
@@ -345,7 +392,7 @@
                         }
                         
                         // Handle direct message format
-                        if (parsed.thinking || parsed.content) {
+                        if (parsed.thinking !== undefined || parsed.content !== undefined) {
                             return {
                                 thinking: parsed.thinking || null,
                                 content: parsed.content || null
@@ -358,7 +405,32 @@
                     }
                 }
             },
+            watch: {
+                config: {
+                    handler() {
+                        this.autoSave();
+                    },
+                    deep: true
+                },
+                additionalParams() {
+                    this.autoSave();
+                },
+                messages: {
+                    handler() {
+                        this.autoSave();
+                    },
+                    deep: true
+                }
+            },
             methods: {
+                autoSave() {
+                    const configData = {
+                        config: this.config,
+                        additionalParams: this.additionalParams,
+                        messages: this.messages
+                    };
+                    localStorage.setItem('llm-api-test-config', JSON.stringify(configData));
+                },
                 addMessage() {
                     this.messages.push({
                         role: 'user',
@@ -371,6 +443,9 @@
                 async sendRequest() {
                     this.loading = true;
                     this.response = '';
+                    this.streamedContent = '';
+                    this.streamedThinking = '';
+                    this.isStreaming = false;
 
                     try {
                         let additionalParamsObj = {};
@@ -408,26 +483,91 @@
                         }
 
                         if (this.config.stream) {
+                            this.isStreaming = true;
                             const reader = response.body.getReader();
                             const decoder = new TextDecoder();
-                            let result = '';
 
                             while (true) {
                                 const { done, value } = await reader.read();
                                 if (done) break;
 
                                 const chunk = decoder.decode(value);
-                                result += chunk;
-                                this.response = result;
+                                const lines = chunk.split('\n');
+
+                                for (const line of lines) {
+                                    if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                                        try {
+                                            const data = JSON.parse(line.slice(6));
+                                            
+                                            // Handle OpenAI-style streaming
+                                            if (data.choices && data.choices[0] && data.choices[0].delta) {
+                                                const delta = data.choices[0].delta;
+                                                if (delta.content) {
+                                                    this.streamedContent += delta.content;
+                                                }
+                                                if (delta.thinking) {
+                                                    this.streamedThinking += delta.thinking;
+                                                }
+                                            }
+                                            // Handle direct content streaming
+                                            else if (data.content) {
+                                                this.streamedContent += data.content;
+                                            }
+                                            else if (data.thinking) {
+                                                this.streamedThinking += data.thinking;
+                                            }
+                                        } catch (e) {
+                                            // Ignore malformed JSON chunks
+                                        }
+                                    }
+                                }
                             }
+                            
+                            // When streaming is done, preserve the content
+                            const finalResponse = {
+                                thinking: this.streamedThinking || null,
+                                content: this.streamedContent || null
+                            };
+                            this.response = JSON.stringify(finalResponse, null, 2);
                         } else {
                             const data = await response.json();
                             this.response = JSON.stringify(data, null, 2);
                         }
                     } catch (error) {
-                        this.response = `Error: ${error.message}`;
+                        let errorMessage = error.message;
+                        
+                        // Provide more helpful CORS error messages
+                        if (error.message.includes('CORS') || error.message.includes('Cross-Origin') || 
+                            error.message.includes('fetch') || error.name === 'TypeError') {
+                            const pageProtocol = window.location.protocol;
+                            const apiUrl = this.config.baseUrl.toLowerCase();
+                            
+                            if (pageProtocol === 'https:' && apiUrl.startsWith('http:')) {
+                                errorMessage = `CORS Error: You're accessing this page via HTTPS but trying to reach an HTTP API. This violates browser security policy.\n\n` +
+                                             `Solutions:\n` +
+                                             `1. Access this page via HTTP instead of HTTPS\n` +
+                                             `2. Or use an HTTPS API endpoint\n\n` +
+                                             `Original error: ${error.message}`;
+                            } else if (pageProtocol === 'file:' && apiUrl.startsWith('http:')) {
+                                errorMessage = `CORS Error: You're accessing this page from file:// but trying to reach an HTTP API. This violates browser security policy.\n\n` +
+                                             `Solutions:\n` +
+                                             `1. Serve this page via HTTP (e.g., using Caddy: "caddy run")\n` +
+                                             `2. Or use a browser with relaxed CORS (not recommended)\n\n` +
+                                             `Original error: ${error.message}`;
+                            } else {
+                                errorMessage = `Network/CORS Error: ${error.message}\n\n` +
+                                             `This might be due to:\n` +
+                                             `- API server not running\n` +
+                                             `- Incorrect API URL\n` +
+                                             `- CORS policy restrictions\n` +
+                                             `- Network connectivity issues`;
+                            }
+                        }
+                        
+                        this.response = `Error: ${errorMessage}`;
                     } finally {
                         this.loading = false;
+                        this.isStreaming = false;
                     }
                 },
                 clearAll() {
@@ -435,12 +575,7 @@
                     this.response = '';
                 },
                 saveConfig() {
-                    const configData = {
-                        config: this.config,
-                        additionalParams: this.additionalParams,
-                        messages: this.messages
-                    };
-                    localStorage.setItem('llm-api-test-config', JSON.stringify(configData));
+                    this.autoSave();
                     alert('Configuration saved to browser storage!');
                 },
                 loadConfig() {
