@@ -42,6 +42,48 @@
             margin: 20px;
             color: #856404;
         }
+        .image-input-section {
+            margin-top: 10px;
+        }
+        .image-preview {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border: 2px solid #dee2e6;
+        }
+        .image-upload-btn {
+            background: #e9ecef;
+            border: 2px dashed #dee2e6;
+            border-radius: 6px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px 0;
+        }
+        .image-upload-btn:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+        .image-upload-btn input[type="file"] {
+            display: none;
+        }
+        .remove-image {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .image-info {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
         .main-content {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -258,6 +300,13 @@
                     </div>
 
                     <div class="form-group">
+                        <div class="checkbox-group">
+                            <input v-model="compressImages" type="checkbox" id="compress">
+                            <label for="compress">Compress Images (resize to 1024px, JPEG 80%)</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label>Additional Parameters (JSON):</label>
                         <textarea v-model="additionalParams" class="json-editor" placeholder='{"max_tokens": 10}'></textarea>
                     </div>
@@ -276,6 +325,22 @@
                             <button @click="removeMessage(index)" class="btn btn-danger" style="padding: 5px 10px;">Remove</button>
                         </div>
                         <textarea v-model="message.content" placeholder="Enter message content..." rows="4"></textarea>
+
+                        <!-- Image Upload Section -->
+                        <div class="image-input-section" v-if="message.role === 'user'">
+                            <div v-if="!message.image" class="image-upload-btn" @click="triggerImageUpload(index)">
+                                <input type="file" :ref="`fileInput${index}`" @change="handleImageUpload($event, index)" accept="image/*">
+                                Click to add image
+                            </div>
+                            <div v-if="message.image">
+                                <img :src="message.image" class="image-preview" alt="Uploaded image">
+                                <div>
+                                    <button @click="removeImage(index)" class="remove-image">Remove Image</button>
+                                    <div class="image-info" v-if="compressImages">Compressed and resized (max 1024px, JPEG 80%)</div>
+                                    <div class="image-info" v-else>Original size (may cause payload errors if too large)</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <button @click="addMessage" class="btn btn-secondary">+ Add Message</button>
@@ -356,7 +421,8 @@
                     messages: [
                         {
                             role: 'user',
-                            content: '你是谁'
+                            content: '你是谁',
+                            image: null
                         }
                     ],
                     response: '',
@@ -364,7 +430,8 @@
                     showRawResponse: false,
                     streamedContent: '',
                     streamedThinking: '',
-                    isStreaming: false
+                    isStreaming: false,
+                    compressImages: true
                 };
             },
             computed: {
@@ -420,6 +487,9 @@
                         this.autoSave();
                     },
                     deep: true
+                },
+                compressImages() {
+                    this.autoSave();
                 }
             },
             methods: {
@@ -427,18 +497,82 @@
                     const configData = {
                         config: this.config,
                         additionalParams: this.additionalParams,
-                        messages: this.messages
+                        messages: this.messages,
+                        compressImages: this.compressImages
                     };
                     localStorage.setItem('llm-api-test-config', JSON.stringify(configData));
                 },
                 addMessage() {
                     this.messages.push({
                         role: 'user',
-                        content: ''
+                        content: '',
+                        image: null
                     });
                 },
                 removeMessage(index) {
                     this.messages.splice(index, 1);
+                },
+                triggerImageUpload(index) {
+                    this.$refs[`fileInput${index}`][0].click();
+                },
+                handleImageUpload(event, index) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        // Check file size (warn if > 5MB)
+                        const maxSize = 5 * 1024 * 1024; // 5MB
+                        if (file.size > maxSize) {
+                            alert(`Warning: Image is ${(file.size / 1024 / 1024).toFixed(1)}MB. Large images may cause "payload too large" errors. Consider using a smaller image.`);
+                        }
+
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            if (this.compressImages) {
+                                this.compressImage(e.target.result, (compressed) => {
+                                    this.messages[index].image = compressed;
+                                });
+                            } else {
+                                this.messages[index].image = e.target.result;
+                            }
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                },
+                compressImage(dataUrl, callback) {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+
+                        // Calculate new dimensions (max 1024px on longest side)
+                        const maxSize = 1024;
+                        let { width, height } = img;
+
+                        if (width > height) {
+                            if (width > maxSize) {
+                                height = (height * maxSize) / width;
+                                width = maxSize;
+                            }
+                        } else {
+                            if (height > maxSize) {
+                                width = (width * maxSize) / height;
+                                height = maxSize;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+
+                        // Draw and compress
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Convert to JPEG with 80% quality
+                        const compressed = canvas.toDataURL('image/jpeg', 0.8);
+                        callback(compressed);
+                    };
+                    img.src = dataUrl;
+                },
+                removeImage(index) {
+                    this.messages[index].image = null;
                 },
                 async sendRequest() {
                     this.loading = true;
@@ -457,10 +591,36 @@
                             }
                         }
 
+                        // Process messages to include images in OpenAI format
+                        const processedMessages = this.messages.filter(m => m.content.trim()).map(message => {
+                            if (message.image && message.role === 'user') {
+                                return {
+                                    role: message.role,
+                                    content: [
+                                        {
+                                            type: 'text',
+                                            text: message.content
+                                        },
+                                        {
+                                            type: 'image_url',
+                                            image_url: {
+                                                url: message.image
+                                            }
+                                        }
+                                    ]
+                                };
+                            } else {
+                                return {
+                                    role: message.role,
+                                    content: message.content
+                                };
+                            }
+                        });
+
                         const payload = {
                             model: this.config.modelName,
                             stream: this.config.stream,
-                            messages: this.messages.filter(m => m.content.trim()),
+                            messages: processedMessages,
                             ...additionalParamsObj
                         };
 
@@ -578,7 +738,7 @@
                     }
                 },
                 clearAll() {
-                    this.messages = [{ role: 'user', content: '' }];
+                    this.messages = [{ role: 'user', content: '', image: null }];
                     this.response = '';
                 },
                 saveConfig() {
@@ -592,6 +752,7 @@
                         this.config = { ...this.config, ...configData.config };
                         this.additionalParams = configData.additionalParams || this.additionalParams;
                         this.messages = configData.messages || this.messages;
+                        this.compressImages = configData.compressImages !== undefined ? configData.compressImages : true;
                         alert('Configuration loaded from browser storage!');
                     } else {
                         alert('No saved configuration found!');
@@ -638,6 +799,7 @@
                         this.config = { ...this.config, ...configData.config };
                         this.additionalParams = configData.additionalParams || this.additionalParams;
                         this.messages = configData.messages || this.messages;
+                        this.compressImages = configData.compressImages !== undefined ? configData.compressImages : true;
                     } catch (e) {
                         console.warn('Failed to load saved configuration');
                     }
