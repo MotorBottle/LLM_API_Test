@@ -52,7 +52,14 @@
             margin: 10px 0;
             border: 2px solid #dee2e6;
         }
-        .image-upload-btn {
+        .video-preview {
+            max-width: 400px;
+            max-height: 300px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border: 2px solid #dee2e6;
+        }
+        .image-upload-btn, .video-upload-btn {
             background: #e9ecef;
             border: 2px dashed #dee2e6;
             border-radius: 6px;
@@ -62,14 +69,14 @@
             transition: all 0.3s;
             margin: 10px 0;
         }
-        .image-upload-btn:hover {
+        .image-upload-btn:hover, .video-upload-btn:hover {
             border-color: #667eea;
             background: #f8f9fa;
         }
-        .image-upload-btn input[type="file"] {
+        .image-upload-btn input[type="file"], .video-upload-btn input[type="file"] {
             display: none;
         }
-        .remove-image {
+        .remove-image, .remove-video {
             background: #dc3545;
             color: white;
             border: none;
@@ -79,10 +86,15 @@
             cursor: pointer;
             margin-left: 10px;
         }
-        .image-info {
+        .image-info, .video-info {
             font-size: 11px;
             color: #6c757d;
             margin-top: 5px;
+        }
+        .media-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
         }
         .main-content {
             display: grid;
@@ -209,6 +221,42 @@
             align-items: center;
             gap: 5px;
         }
+        .metrics-panel {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .metrics-header {
+            font-weight: bold;
+            color: #0066cc;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .metric-item {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #b3d9ff;
+        }
+        .metric-label {
+            color: #666;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            color: #0066cc;
+            font-weight: bold;
+            font-size: 14px;
+        }
         .message-content {
             background: white;
             border: 1px solid #dee2e6;
@@ -326,18 +374,34 @@
                         </div>
                         <textarea v-model="message.content" placeholder="Enter message content..." rows="4"></textarea>
 
-                        <!-- Image Upload Section -->
+                        <!-- Media Upload Section -->
                         <div class="image-input-section" v-if="message.role === 'user'">
-                            <div v-if="!message.image" class="image-upload-btn" @click="triggerImageUpload(index)">
-                                <input type="file" :ref="`fileInput${index}`" @change="handleImageUpload($event, index)" accept="image/*">
-                                Click to add image
+                            <!-- Image Upload -->
+                            <div v-if="!message.image && !message.video" class="media-buttons">
+                                <div class="image-upload-btn" @click="triggerImageUpload(index)" style="flex: 1;">
+                                    <input type="file" :ref="`fileInput${index}`" @change="handleImageUpload($event, index)" accept="image/*">
+                                    Click to add image
+                                </div>
+                                <div class="video-upload-btn" @click="triggerVideoUpload(index)" style="flex: 1;">
+                                    <input type="file" :ref="`videoInput${index}`" @change="handleVideoUpload($event, index)" accept="video/*">
+                                    Click to add video
+                                </div>
                             </div>
+                            <!-- Image Preview -->
                             <div v-if="message.image">
                                 <img :src="message.image" class="image-preview" alt="Uploaded image">
                                 <div>
                                     <button @click="removeImage(index)" class="remove-image">Remove Image</button>
                                     <div class="image-info" v-if="compressImages">Compressed and resized (max 1024px, JPEG 80%)</div>
                                     <div class="image-info" v-else>Original size (may cause payload errors if too large)</div>
+                                </div>
+                            </div>
+                            <!-- Video Preview -->
+                            <div v-if="message.video">
+                                <video :src="message.video" class="video-preview" controls></video>
+                                <div>
+                                    <button @click="removeVideo(index)" class="remove-video">Remove Video</button>
+                                    <div class="video-info">Video uploaded (base64 encoded)</div>
                                 </div>
                             </div>
                         </div>
@@ -385,9 +449,49 @@
                 
                 <!-- Show content (either streaming or completed) -->
                 <div v-if="response || isStreaming">
+                    <!-- Performance Metrics Panel - Updated for streaming/non-streaming modes -->
+                    <div v-if="performanceMetrics && !loading" class="metrics-panel">
+                        <div class="metrics-header">Performance Metrics</div>
+                        <div class="metrics-grid">
+                            <!-- Streaming mode metrics -->
+                            <div v-if="performanceMetrics.firstTokenLatency" class="metric-item">
+                                <div class="metric-label">First Token Latency</div>
+                                <div class="metric-value">{{ performanceMetrics.firstTokenLatency }} ms</div>
+                            </div>
+                            <div v-if="performanceMetrics.prefillSpeed" class="metric-item">
+                                <div class="metric-label">Prefill Speed</div>
+                                <div class="metric-value">{{ performanceMetrics.prefillSpeed }} tokens/s</div>
+                            </div>
+                            <div v-if="performanceMetrics.outputSpeed" class="metric-item">
+                                <div class="metric-label">Output Speed</div>
+                                <div class="metric-value">{{ performanceMetrics.outputSpeed }} tokens/s</div>
+                            </div>
+
+                            <!-- Non-streaming mode metrics -->
+                            <div v-if="performanceMetrics.avgOutputSpeed" class="metric-item">
+                                <div class="metric-label">Avg Output Speed</div>
+                                <div class="metric-value">{{ performanceMetrics.avgOutputSpeed }} tokens/s</div>
+                            </div>
+
+                            <!-- Common metrics -->
+                            <div v-if="performanceMetrics.totalTime" class="metric-item">
+                                <div class="metric-label">Total Time</div>
+                                <div class="metric-value">{{ performanceMetrics.totalTime }} ms</div>
+                            </div>
+                            <div v-if="performanceMetrics.promptTokens" class="metric-item">
+                                <div class="metric-label">Prompt Tokens</div>
+                                <div class="metric-value">{{ performanceMetrics.promptTokens }} tokens</div>
+                            </div>
+                            <div v-if="performanceMetrics.completionTokens" class="metric-item">
+                                <div class="metric-label">Completion Tokens</div>
+                                <div class="metric-value">{{ performanceMetrics.completionTokens }} tokens</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Raw JSON View -->
                     <div v-if="showRawResponse" class="response-content">{{ response }}</div>
-                    
+
                     <!-- Styled View -->
                     <div v-else>
                         <div v-if="parsedResponse && parsedResponse.thinking" class="thinking-content">
@@ -422,7 +526,8 @@
                         {
                             role: 'user',
                             content: '你是谁',
-                            image: null
+                            image: null,
+                            video: null
                         }
                     ],
                     response: '',
@@ -431,7 +536,13 @@
                     streamedContent: '',
                     streamedThinking: '',
                     isStreaming: false,
-                    compressImages: true
+                    compressImages: true,
+                    // Timing metrics
+                    requestStartTime: null,
+                    firstTokenTime: null,
+                    responseEndTime: null,
+                    tokenCount: 0,
+                    promptTokens: 0
                 };
             },
             computed: {
@@ -443,12 +554,12 @@
                             content: this.streamedContent || null
                         };
                     }
-                    
+
                     if (!this.response) return null;
-                    
+
                     try {
                         const parsed = JSON.parse(this.response);
-                        
+
                         // Handle OpenAI-style response with choices
                         if (parsed.choices && parsed.choices[0] && parsed.choices[0].message) {
                             const message = parsed.choices[0].message;
@@ -457,7 +568,7 @@
                                 content: message.content || null
                             };
                         }
-                        
+
                         // Handle direct message format
                         if (parsed.thinking !== undefined || parsed.content !== undefined) {
                             return {
@@ -465,11 +576,79 @@
                                 content: parsed.content || null
                             };
                         }
-                        
+
                         return null;
                     } catch (e) {
                         return null;
                     }
+                },
+                performanceMetrics() {
+                    if (!this.requestStartTime) return null;
+
+                    const metrics = {};
+
+                    // Check if this is streaming mode
+                    const isStreaming = this.config.stream;
+
+                    if (isStreaming) {
+                        // Streaming mode: We can measure prefill and output separately
+
+                        // First token latency (TTFT - Time To First Token) - This is prefill time
+                        if (this.firstTokenTime) {
+                            const prefillTimeMs = this.firstTokenTime - this.requestStartTime;
+                            metrics.firstTokenLatency = prefillTimeMs.toFixed(2);
+
+                            // Prefill speed (tokens per second during prefill phase)
+                            const prefillTimeInSeconds = prefillTimeMs / 1000;
+                            if (prefillTimeInSeconds > 0 && this.promptTokens > 0) {
+                                metrics.prefillSpeed = (this.promptTokens / prefillTimeInSeconds).toFixed(2);
+                            }
+                        }
+
+                        // Output speed (tokens per second) - only count generation phase after first token
+                        if (this.responseEndTime && this.firstTokenTime && this.tokenCount > 0) {
+                            const outputTimeInSeconds = (this.responseEndTime - this.firstTokenTime) / 1000;
+                            if (outputTimeInSeconds > 0) {
+                                metrics.outputSpeed = (this.tokenCount / outputTimeInSeconds).toFixed(2);
+                            }
+                        }
+
+                        // Total time
+                        if (this.responseEndTime) {
+                            metrics.totalTime = (this.responseEndTime - this.requestStartTime).toFixed(2);
+                        }
+
+                        // Display both prompt and completion tokens
+                        if (this.promptTokens > 0) {
+                            metrics.promptTokens = this.promptTokens;
+                        }
+                        if (this.tokenCount > 0) {
+                            metrics.completionTokens = this.tokenCount;
+                        }
+                    } else {
+                        // Non-streaming mode: Can't separate prefill and output, only show total time and average speed
+
+                        // Total processing time
+                        if (this.responseEndTime) {
+                            metrics.totalTime = (this.responseEndTime - this.requestStartTime).toFixed(2);
+
+                            // Average output speed (completion tokens / total time)
+                            const totalTimeInSeconds = (this.responseEndTime - this.requestStartTime) / 1000;
+                            if (totalTimeInSeconds > 0 && this.tokenCount > 0) {
+                                metrics.avgOutputSpeed = (this.tokenCount / totalTimeInSeconds).toFixed(2);
+                            }
+                        }
+
+                        // Display both prompt and completion tokens
+                        if (this.promptTokens > 0) {
+                            metrics.promptTokens = this.promptTokens;
+                        }
+                        if (this.tokenCount > 0) {
+                            metrics.completionTokens = this.tokenCount;
+                        }
+                    }
+
+                    return Object.keys(metrics).length > 0 ? metrics : null;
                 }
             },
             watch: {
@@ -494,19 +673,34 @@
             },
             methods: {
                 autoSave() {
+                    // Clone messages but exclude video and image data to avoid quota exceeded errors
+                    const messagesWithoutMedia = this.messages.map(msg => ({
+                        role: msg.role,
+                        content: msg.content,
+                        image: null,  // Don't save images in auto-save
+                        video: null   // Don't save videos in auto-save
+                    }));
+
                     const configData = {
                         config: this.config,
                         additionalParams: this.additionalParams,
-                        messages: this.messages,
+                        messages: messagesWithoutMedia,
                         compressImages: this.compressImages
                     };
-                    localStorage.setItem('llm-api-test-config', JSON.stringify(configData));
+
+                    try {
+                        localStorage.setItem('llm-api-test-config', JSON.stringify(configData));
+                    } catch (e) {
+                        // Silently fail if quota exceeded - media files are too large for localStorage
+                        console.warn('Could not save config to localStorage:', e.message);
+                    }
                 },
                 addMessage() {
                     this.messages.push({
                         role: 'user',
                         content: '',
-                        image: null
+                        image: null,
+                        video: null
                     });
                 },
                 removeMessage(index) {
@@ -574,6 +768,28 @@
                 removeImage(index) {
                     this.messages[index].image = null;
                 },
+                triggerVideoUpload(index) {
+                    this.$refs[`videoInput${index}`][0].click();
+                },
+                handleVideoUpload(event, index) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        // Check file size (warn if > 20MB)
+                        const maxSize = 20 * 1024 * 1024; // 20MB
+                        if (file.size > maxSize) {
+                            alert(`Warning: Video is ${(file.size / 1024 / 1024).toFixed(1)}MB. Large videos may cause "payload too large" errors or slow uploads. Consider using a smaller video.`);
+                        }
+
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.messages[index].video = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                },
+                removeVideo(index) {
+                    this.messages[index].video = null;
+                },
                 async sendRequest() {
                     this.loading = true;
                     this.response = '';
@@ -581,7 +797,16 @@
                     this.streamedThinking = '';
                     this.isStreaming = false;
 
+                    // Reset timing metrics
+                    this.requestStartTime = null;
+                    this.firstTokenTime = null;
+                    this.responseEndTime = null;
+                    this.tokenCount = 0;
+                    this.promptTokens = 0;
+
                     try {
+                        // Record request start time
+                        this.requestStartTime = performance.now();
                         let additionalParamsObj = {};
                         if (this.additionalParams.trim()) {
                             try {
@@ -591,23 +816,39 @@
                             }
                         }
 
-                        // Process messages to include images in OpenAI format
+                        // Process messages to include images and videos in OpenAI format
                         const processedMessages = this.messages.filter(m => m.content.trim()).map(message => {
-                            if (message.image && message.role === 'user') {
+                            if ((message.image || message.video) && message.role === 'user') {
+                                const content = [
+                                    {
+                                        type: 'text',
+                                        text: message.content
+                                    }
+                                ];
+
+                                // Add image if present
+                                if (message.image) {
+                                    content.push({
+                                        type: 'image_url',
+                                        image_url: {
+                                            url: message.image
+                                        }
+                                    });
+                                }
+
+                                // Add video if present
+                                if (message.video) {
+                                    content.push({
+                                        type: 'video_url',
+                                        video_url: {
+                                            url: message.video
+                                        }
+                                    });
+                                }
+
                                 return {
                                     role: message.role,
-                                    content: [
-                                        {
-                                            type: 'text',
-                                            text: message.content
-                                        },
-                                        {
-                                            type: 'image_url',
-                                            image_url: {
-                                                url: message.image
-                                            }
-                                        }
-                                    ]
+                                    content: content
                                 };
                             } else {
                                 return {
@@ -658,12 +899,31 @@
                                     if (line.startsWith('data: ') && line !== 'data: [DONE]') {
                                         try {
                                             const data = JSON.parse(line.slice(6));
-                                            
+
+                                            // Extract usage information if present (usually in final chunk)
+                                            if (data.usage) {
+                                                if (data.usage.completion_tokens) {
+                                                    this.tokenCount = data.usage.completion_tokens;
+                                                }
+                                                if (data.usage.prompt_tokens) {
+                                                    this.promptTokens = data.usage.prompt_tokens;
+                                                }
+                                                console.log('Streaming usage data received:', data.usage);
+                                            }
+
                                             // Handle OpenAI-style streaming
                                             if (data.choices && data.choices[0] && data.choices[0].delta) {
                                                 const delta = data.choices[0].delta;
                                                 if (delta.content) {
+                                                    // Record first token time
+                                                    if (this.firstTokenTime === null && delta.content.length > 0) {
+                                                        this.firstTokenTime = performance.now();
+                                                    }
                                                     this.streamedContent += delta.content;
+                                                    // Count tokens (approximate if usage not provided)
+                                                    if (!data.usage) {
+                                                        this.tokenCount += delta.content.split(/\s+/).filter(t => t.length > 0).length;
+                                                    }
                                                 }
                                                 // Support multiple reasoning field formats
                                                 if (delta.reasoning) {
@@ -678,7 +938,14 @@
                                             }
                                             // Handle direct content streaming
                                             else if (data.content) {
+                                                if (this.firstTokenTime === null && data.content.length > 0) {
+                                                    this.firstTokenTime = performance.now();
+                                                }
                                                 this.streamedContent += data.content;
+                                                // Count tokens (approximate if usage not provided)
+                                                if (!data.usage) {
+                                                    this.tokenCount += data.content.split(/\s+/).filter(t => t.length > 0).length;
+                                                }
                                             }
                                             else if (data.thinking) {
                                                 this.streamedThinking += data.thinking;
@@ -690,6 +957,9 @@
                                 }
                             }
                             
+                            // Record response end time
+                            this.responseEndTime = performance.now();
+
                             // When streaming is done, preserve the content
                             const finalResponse = {
                                 thinking: this.streamedThinking || null,
@@ -698,6 +968,25 @@
                             this.response = JSON.stringify(finalResponse, null, 2);
                         } else {
                             const data = await response.json();
+
+                            // For non-streaming, first token time is same as end time
+                            this.firstTokenTime = performance.now();
+                            this.responseEndTime = this.firstTokenTime;
+
+                            // Count tokens from API response (use usage field if available)
+                            if (data.usage) {
+                                if (data.usage.completion_tokens) {
+                                    this.tokenCount = data.usage.completion_tokens;
+                                }
+                                if (data.usage.prompt_tokens) {
+                                    this.promptTokens = data.usage.prompt_tokens;
+                                }
+                            } else if (data.choices && data.choices[0] && data.choices[0].message) {
+                                // Fallback: approximate by word count if usage not provided
+                                const content = data.choices[0].message.content || '';
+                                this.tokenCount = content.split(/\s+/).filter(t => t.length > 0).length;
+                            }
+
                             this.response = JSON.stringify(data, null, 2);
                         }
                     } catch (error) {
@@ -738,7 +1027,7 @@
                     }
                 },
                 clearAll() {
-                    this.messages = [{ role: 'user', content: '', image: null }];
+                    this.messages = [{ role: 'user', content: '', image: null, video: null }];
                     this.response = '';
                 },
                 saveConfig() {
